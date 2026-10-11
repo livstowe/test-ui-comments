@@ -105,7 +105,14 @@ export class GitHubClient {
         'X-GitHub-Api-Version': '2022-11-28', ...(body ? { 'Content-Type': 'application/json' } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
-    enforce(response.ok || response.status === 302, `GitHub returned HTTP ${response.status}`);
+    if (!response.ok && response.status !== 302) {
+      let detail = '';
+      try {
+        const error = parseJson(await readBounded(response, 16 * 1024));
+        if (typeof error.message === 'string' && error.message.length <= 200) detail = `: ${error.message}`;
+      } catch { /* Status and public API route remain useful without error JSON. */ }
+      throw new PublicationError(`${method} ${route.split('?')[0]} returned HTTP ${response.status}${detail}`);
+    }
     return response;
   }
   async json(route, options) {
