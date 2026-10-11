@@ -1,3 +1,3 @@
 export function toggleItem(item) {
-  return { ...item, enabled: !item.enabled };
+  return { ...item, enabled: item.enabled !== true };
 }
