@@ -16,6 +16,10 @@ PR code or artifact content. Its only write is creating or updating one marker
 comment owned by `github-actions[bot]`. Human comments are preserved. Old or stale
 evidence cannot replace a newer result.
 
+The publisher grants `actions: read`, `contents: read` and `pull-requests: write`.
+The PR-comment POST was rejected with `issues: write` plus `pull-requests: read`
+in the initial hosted check; this uses the documented PR-write alternative.
+
 Passing and failing browser runs can both publish evidence. A failed assertion
 continues to fail the recording workflow after evidence upload. Unmapped-only
 changes report that no scenario ran. Missing evidence and malformed manifests
