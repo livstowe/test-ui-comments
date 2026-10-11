@@ -8,6 +8,12 @@ import { SCENARIOS, mapChangedFiles } from './scenarios.mjs';
 export const REPOSITORY = 'livstowe/test-ui-comments';
 export const ARTIFACT = 'synthetic-ui-evidence';
 export const COMMENT_TAG = '<!-- synthetic-ui-evidence -->';
+export const INLINE_TAG = '<!-- synthetic-inline-attachments -->';
+const OWNER_LOGIN = 'livstowe';
+const OWNER_ID = 27290147;
+const MAX_INLINE_BYTES = 10 * 1024 * 1024;
+const INLINE_STORAGE_HOSTS = new Set(['private-user-images.githubusercontent.com', 'user-images.githubusercontent.com',
+  'github-production-user-asset-6210df.s3.amazonaws.com']);
 const WORKFLOW_PATH = '.github/workflows/record.yml';
 const WORKFLOW_NAME = 'Synthetic UI recordings';
 const MAX_ZIP_BYTES = 40 * 1024 * 1024;
@@ -35,6 +41,52 @@ export function hash(bytes) {
 function parseJson(bytes) {
   try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
   catch { throw new PublicationError('Invalid UTF-8 JSON evidence'); }
+}
+
+function ownerHandoff(comment) {
+  return comment?.user?.login === OWNER_LOGIN && comment.user.id === OWNER_ID && comment.user.type === 'User'
+    && typeof comment.body === 'string' && comment.body.startsWith(`${INLINE_TAG}\n`);
+}
+function nativeUrl(value) {
+  return typeof value === 'string' && /^https:\/\/github\.com\/user-attachments\/assets\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
+}
+
+export function parseHandoff(comment) {
+  enforce(ownerHandoff(comment) && positive(comment.id) && Buffer.byteLength(comment.body, 'utf8') <= 16 * 1024,
+    'Attachment handoff identity or size is invalid');
+  const lines = comment.body.split('\n');
+  const encoded = lines[1]?.match(/^<!-- (\{.*\}) -->$/);
+  enforce(encoded, 'Attachment handoff receipt is missing');
+  const receipt = parseJson(Buffer.from(encoded[1]));
+  enforce(fields(receipt, ['schema_version', 'run_id', 'run_attempt', 'tested_sha', 'scenarios'])
+    && receipt.schema_version === 1 && positive(receipt.run_id) && positive(receipt.run_attempt)
+    && sha(receipt.tested_sha) && Array.isArray(receipt.scenarios)
+    && receipt.scenarios.length > 0 && receipt.scenarios.length <= 3, 'Attachment handoff receipt is malformed');
+  for (const scenario of receipt.scenarios) {
+    enforce(fields(scenario, ['id', 'sha256', 'size_bytes']) && Object.hasOwn(SCENARIOS, scenario.id)
+      && typeof scenario.sha256 === 'string' && /^[a-f0-9]{64}$/.test(scenario.sha256)
+      && positive(scenario.size_bytes) && scenario.size_bytes <= MAX_INLINE_BYTES, 'Attachment handoff scenario is malformed');
+  }
+  const urls = lines.slice(2).filter((line) => line.trim() !== '');
+  enforce(urls.length === receipt.scenarios.length && urls.every(nativeUrl)
+    && new Set(urls).size === urls.length
+    && new Set(receipt.scenarios.map(({ id }) => id)).size === receipt.scenarios.length,
+  'Attachment handoff URLs or order are invalid');
+  return { commentId: comment.id, receipt, urls };
+}
+
+export function contextFromEvent(event, environment) {
+  const context = { repository: environment.GITHUB_REPOSITORY, repositoryId: Number(environment.GITHUB_REPOSITORY_ID) };
+  if (environment.GITHUB_EVENT_NAME === 'workflow_run') {
+    enforce(event.workflow_run, 'Expected workflow_run event');
+    return { ...context, runId: event.workflow_run.id, runAttempt: event.workflow_run.run_attempt };
+  }
+  enforce(environment.GITHUB_EVENT_NAME === 'issue_comment' && event.action === 'created'
+    && event.repository?.full_name === REPOSITORY && event.repository.id === context.repositoryId
+    && event.issue?.pull_request && positive(event.issue.number), 'Unsupported attachment handoff event');
+  const handoff = parseHandoff(event.comment);
+  return { ...context, runId: handoff.receipt.run_id, runAttempt: handoff.receipt.run_attempt,
+    pullRequestNumber: event.issue.number, handoffCommentId: handoff.commentId };
 }
 
 export function openEvidence(archive) {
@@ -145,6 +197,30 @@ export class GitHubClient {
     enforce(blob.ok, `Artifact storage returned HTTP ${blob.status}`);
     return readBounded(blob, MAX_ZIP_BYTES);
   }
+  async downloadAttachment(original) {
+    enforce(nativeUrl(original), 'Invalid native attachment URL');
+    let address = new URL(original);
+    for (let redirects = 0; redirects <= 3; redirects += 1) {
+      const allowed = address.hostname === 'github.com'
+        ? nativeUrl(`${address.origin}${address.pathname}`) && !address.search
+        : INLINE_STORAGE_HOSTS.has(address.hostname);
+      enforce(allowed && address.protocol === 'https:' && !address.username && !address.password
+        && !address.hash && (!address.port || address.port === '443'), 'Unsafe native attachment redirect');
+      // Public synthetic attachment requests never receive a GitHub token.
+      const response = await this.fetcher(address, { redirect: 'manual', signal: AbortSignal.timeout(20_000) });
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get('location');
+        enforce(redirects < 3 && location && location.length <= 4096, 'Native attachment redirect limit or location is invalid');
+        if (response.body) await response.body.cancel();
+        try { address = new URL(location, address); }
+        catch { throw new PublicationError('Invalid native attachment redirect'); }
+        continue;
+      }
+      enforce(response.ok, `Native attachment returned HTTP ${response.status}`);
+      return readBounded(response, MAX_INLINE_BYTES);
+    }
+    throw new PublicationError('Native attachment redirect limit exceeded');
+  }
 }
 
 function checkRun(run, workflow, context) {
@@ -229,21 +305,53 @@ export function chooseComment(comments, body, run) {
   return { action: body === owned[0].body ? 'unchanged' : 'update', id: owned[0].id, body };
 }
 
-function buildComment(manifest, run, artifact, mapping) {
+async function inlineAttachments(client, comments, evidence, context) {
+  const handoffs = comments.filter(ownerHandoff).map(parseHandoff)
+    .filter(({ receipt }) => receipt.run_id === evidence.manifest.run_id);
+  enforce(handoffs.length <= 1, 'Duplicate owner attachment handoffs exist for the source run');
+  if (!handoffs.length) {
+    enforce(!context.handoffCommentId, 'Triggering attachment handoff is missing');
+    return [];
+  }
+  const { receipt, urls, commentId } = handoffs[0];
+  const manifest = evidence.manifest;
+  enforce((!context.handoffCommentId || context.handoffCommentId === commentId)
+    && receipt.run_attempt === manifest.run_attempt && receipt.tested_sha === manifest.tested_sha
+    && receipt.scenarios.length === manifest.scenarios.length, 'Attachment handoff source is stale or conflicting');
+  for (let index = 0; index < receipt.scenarios.length; index += 1) {
+    const scenario = receipt.scenarios[index];
+    const recording = manifest.scenarios[index];
+    enforce(scenario.id === recording.id && scenario.sha256 === recording.video.sha256
+      && scenario.size_bytes === recording.video.size_bytes, 'Attachment handoff does not match recording evidence');
+  }
+  await Promise.all(urls.map(async (url, index) => {
+    const bytes = await client.downloadAttachment(url);
+    const expected = evidence.files[manifest.scenarios[index].video.path];
+    enforce(bytes instanceof Uint8Array && bytes.length <= MAX_INLINE_BYTES && bytes.length === expected.length
+      && hash(bytes) === hash(expected), 'Native attachment bytes, size or hash do not match evidence');
+  }));
+  return urls;
+}
+
+function buildComment(manifest, run, artifact, mapping, nativeUrls) {
   const runLink = `https://github.com/${REPOSITORY}/actions/runs/${run.id}`;
   const bundleLink = `${runLink}/artifacts/${artifact.id}`;
   const rows = manifest.scenarios.map((scenario) => `| ${SCENARIOS[scenario.id].label} | ${scenario.result.toUpperCase()} | [MP4 in bundle](${bundleLink}) |`);
   const escapedPaths = mapping.unmapped.map((name) => `- <code>${name.replace(/[&<>"'`\[\]*_~|():]/g,
     (character) => `&#${character.codePointAt(0)};`)}</code>`);
+  const inlineRows = nativeUrls.length ? [
+    'Native videos were manually uploaded by the repository owner. The bot verified their bytes and maintains this comment automatically.', '',
+    ...manifest.scenarios.flatMap((scenario, index) => [`**${SCENARIOS[scenario.id].label}: ${scenario.result.toUpperCase()}**`, '', nativeUrls[index], '']),
+  ] : ['This comment contains no inline video attachments; no matching owner upload handoff was supplied.', ''];
   const body = [COMMENT_TAG, `<!-- run=${run.id} attempt=${run.run_attempt} -->`, '### Synthetic UI recordings', '',
     `Tested merge: \`${manifest.tested_sha}\``, `PR head: \`${manifest.pull_request.head_sha}\``,
     `PR base: \`${manifest.pull_request.base_sha}\``, `Producer: **${run.conclusion.toUpperCase()}**, attempt ${run.run_attempt}.`, '',
     `[Recording run](${runLink}) · [Download recording bundle](${bundleLink})`, '',
-    '| Synthetic scenario | Result | Recording |', '| --- | --- | --- |', ...rows, '',
+    '| Synthetic scenario | Result | Recording |', '| --- | --- | --- |', ...rows, '', ...inlineRows,
     `Unmapped changed paths: ${mapping.unmapped.length}. No fixture coverage is claimed for those paths.`,
     ...escapedPaths, '',
     'These independent toy scenarios use no external services. Results are producer claims; hashes verify the received recording bytes.',
-    'The artifact link downloads a ZIP containing the MP4s. GitHub login is required and artifacts expire. This comment contains no inline video attachments.', ''].join('\n');
+    'The artifact link downloads a ZIP containing the MP4s. GitHub login is required and artifacts expire.', ''].join('\n');
   enforce(Buffer.byteLength(body, 'utf8') <= 60_000, 'Comment exceeds size limit');
   return body;
 }
@@ -269,6 +377,7 @@ export async function publishEvidence(client, context, { write = false } = {}) {
   enforce(fields(receipt, ['number', 'head_sha', 'base_sha', 'head_repository', 'head_repository_id', 'head_ref'])
     && positive(receipt.number), 'PR receipt is missing or malformed');
   const pr = await client.json(`${prefix}/pulls/${receipt.number}`);
+  enforce(!context.pullRequestNumber || context.pullRequestNumber === pr.number, 'Handoff event refers to a different PR');
   checkPr(pr, run, receipt);
   const owner = run.head_repository.full_name.split('/')[0];
   const candidates = await client.list(`${prefix}/pulls?state=open&head=${encodeURIComponent(`${owner}:${run.head_branch}`)}`, 100);
@@ -293,8 +402,9 @@ export async function publishEvidence(client, context, { write = false } = {}) {
   if (manifest.scope === 'unmapped') {
     return { action: 'skipped', summary: '| Scope | Result |\n| --- | --- |\n| Unmapped changes | No mapped scenario ran; no comment was written. |\n' };
   }
-  const body = buildComment(manifest, run, artifact, mapping);
   const comments = await client.list(`${prefix}/issues/${pr.number}/comments`, 500);
+  const nativeUrls = await inlineAttachments(client, comments, evidence, context);
+  const body = buildComment(manifest, run, artifact, mapping, nativeUrls);
   const plan = chooseComment(comments, body, run);
   if (!write || plan.action === 'unchanged') return plan;
   const lastPr = await client.json(`${prefix}/pulls/${pr.number}`);
@@ -313,9 +423,7 @@ async function main() {
     const eventBytes = await readFile(process.env.GITHUB_EVENT_PATH);
     enforce(eventBytes.length <= 1024 * 1024, 'Workflow event exceeds size limit');
     const event = parseJson(eventBytes);
-    enforce(event.workflow_run, 'Expected workflow_run event');
-    const context = { repository: process.env.GITHUB_REPOSITORY, repositoryId: Number(process.env.GITHUB_REPOSITORY_ID),
-      runId: event.workflow_run.id, runAttempt: event.workflow_run.run_attempt };
+    const context = contextFromEvent(event, process.env);
     const outcome = await publishEvidence(new GitHubClient(process.env.GH_TOKEN), context, { write: process.argv.includes('--write') });
     console.log(`Publisher: ${outcome.action}${outcome.id ? ` comment ${outcome.id}` : ''}`);
     if (outcome.summary) console.log(outcome.summary);

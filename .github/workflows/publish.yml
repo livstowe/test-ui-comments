@@ -4,6 +4,8 @@ on:
   workflow_run:
     workflows: [Synthetic UI recordings]
     types: [completed]
+  issue_comment:
+    types: [created]
 
 permissions: {}
 
@@ -11,12 +13,16 @@ jobs:
   publish:
     if: >-
       github.repository == 'livstowe/test-ui-comments' &&
-      github.event.workflow_run.event == 'pull_request' &&
-      (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
+      ((github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' &&
+      (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+      github.event.comment.user.login == 'livstowe' && github.event.comment.user.id == 27290147 &&
+      github.event.comment.user.type == 'User' &&
+      startsWith(github.event.comment.body, '<!-- synthetic-inline-attachments -->')))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
-      group: synthetic-evidence-${{ github.event.workflow_run.head_repository.id }}-${{ github.event.workflow_run.head_branch }}
+      group: synthetic-evidence-${{ github.repository }}
       cancel-in-progress: false
     permissions:
       actions: read
