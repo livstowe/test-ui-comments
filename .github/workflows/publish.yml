@@ -1,0 +1,47 @@
+name: Publish synthetic recording evidence
+
+on:
+  workflow_run:
+    workflows: [Synthetic UI recordings]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'livstowe/test-ui-comments' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: synthetic-evidence-${{ github.event.workflow_run.head_repository.id }}-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+      issues: write
+    steps:
+      - name: Check out trusted publisher files
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/publish.mjs
+            /scripts/scenarios.mjs
+            /package.json
+            /package-lock.json
+      - name: Set up Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '22'
+      - name: Install the trusted ZIP reader
+        run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Validate evidence and maintain the bot comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish.mjs --write

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Little item board</title>
+    <link rel="stylesheet" href="/style.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">A small browser demo</p>
+        <h1>Little item board</h1>
+        <p class="intro">Find an item, change its state, and make a little space.</p>
+      </header>
+      <aside class="notice" data-testid="notice" aria-label="Sample data notice">
+        <div><strong>Everything here is a sample.</strong><p>Your changes stay in this tab.</p></div>
+        <button type="button" id="dismiss-notice">Dismiss notice</button>
+      </aside>
+      <button type="button" id="restore-notice" hidden>Show notice again</button>
+      <section aria-label="Item collection">
+        <div class="toolbar">
+          <label for="item-filter">Find an item<input id="item-filter" type="search" placeholder="Try notes or sketch" autocomplete="off"></label>
+          <button type="button" id="reset-filter">Clear filter</button>
+        </div>
+        <p class="count" id="result-count" role="status">3 items shown</p>
+        <ul id="items" aria-label="Items"></ul>
+        <p id="empty-state" hidden>No items match. Try another word.</p>
+      </section>
+      <footer><span class="status-dot"></span>Local sample · no account or server data</footer>
+    </main>
+  </body>
+</html>

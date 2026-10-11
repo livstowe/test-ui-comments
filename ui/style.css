@@ -1,0 +1,30 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: #17352e; background: #f2f5ed; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 880px; margin: 42px auto; padding: 32px 38px; background: #fffefa; border: 1px solid #d8e2d4; border-radius: 24px; box-shadow: 0 12px 40px #1f3d2910; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #4a6b59; margin: 0 0 8px; }
+h1 { font-size: 36px; letter-spacing: -.04em; margin: 0; }
+.intro { margin: 10px 0 26px; color: #52665c; }
+button, input { font: inherit; }
+button { color: #17352e; background: #edf3e7; border: 1px solid #b7ccad; border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+button:hover { background: #dce9d4; }
+button:focus-visible, input:focus-visible { outline: 3px solid #255c45; outline-offset: 3px; }
+.notice { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px; background: #f8edc9; border: 1px solid #e4d295; border-radius: 12px; margin-bottom: 24px; }
+.notice p { margin: 5px 0 0; font-size: 14px; }
+.notice button { background: #fff8e1; border-color: #cbbb82; white-space: nowrap; }
+#restore-notice { margin-bottom: 24px; }
+.toolbar { display: flex; align-items: flex-end; gap: 12px; }
+label { display: grid; gap: 7px; flex: 1; font-size: 14px; font-weight: 600; }
+input { width: 100%; min-width: 0; color: #17352e; background: white; border: 1px solid #a9beac; padding: 12px 14px; border-radius: 10px; font-weight: 400; }
+.count { font-size: 14px; color: #52665c; margin: 18px 0 12px; }
+ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.item { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border: 1px solid #d8e2d4; border-radius: 12px; gap: 16px; }
+.item h2 { font-size: 18px; margin: 0 0 4px; }
+.item p { font-size: 14px; margin: 0; color: #52665c; }
+.item-actions { display: flex; gap: 12px; align-items: center; }
+.state { font-size: 13px; font-weight: 700; background: #eef0ed; color: #4e6256; padding: 7px 10px; border-radius: 20px; }
+.state[data-enabled="true"] { color: #155330; background: #d6efd8; }
+footer { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #52665c; margin-top: 26px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #56865d; }
+[hidden] { display: none !important; }
+@media (max-width: 650px) { main { margin: 16px; padding: 24px; } h1 { font-size: 30px; } .notice, .item { align-items: flex-start; flex-direction: column; } }

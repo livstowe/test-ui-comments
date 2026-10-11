@@ -1,0 +1,75 @@
+name: Synthetic UI recordings
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: synthetic-ui-record-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    if: github.repository == 'livstowe/test-ui-comments'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Select browser scenarios
+        id: selection
+        run: node scripts/record.mjs select
+      - name: Test producer validation
+        run: node --test cypress/*.test.mjs
+      - name: Install public locked dependencies
+        if: steps.selection.outputs.specs != ''
+        run: npm ci --no-audit --no-fund
+      - name: Record selected browser scenarios
+        id: browser
+        if: steps.selection.outputs.specs != ''
+        continue-on-error: true
+        env:
+          SELECTED_SPECS: ${{ steps.selection.outputs.specs }}
+        run: |
+          node ui/server.mjs > artifacts/server.log 2>&1 &
+          item_server_pid=$!
+          trap 'kill "$item_server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:4080/ > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:4080/ > /dev/null
+          npm run record -- --spec "$SELECTED_SPECS"
+      - name: Upload readable preview frames
+        if: always() && (steps.browser.outcome == 'success' || steps.browser.outcome == 'failure')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: synthetic-ui-preview-frames
+          path: artifacts/screenshots/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Prepare evidence including failed assertions
+        id: evidence
+        if: always() && steps.selection.outcome == 'success' && (steps.browser.outcome == 'success' || steps.browser.outcome == 'failure' || steps.selection.outputs.specs == '')
+        env:
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+        run: node scripts/record.mjs prepare
+      - name: Upload tested evidence bundle
+        if: always() && steps.evidence.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: synthetic-ui-evidence
+          path: artifacts/evidence/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve browser failure conclusion
+        if: always() && steps.browser.outcome == 'failure'
+        run: exit 1

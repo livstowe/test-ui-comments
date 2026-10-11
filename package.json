@@ -1,0 +1,17 @@
+{
+  "name": "synthetic-ui-recordings",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An original browser demo with verified pull request recording evidence.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node ui/server.mjs",
+    "test": "node --test",
+    "record": "cypress run --browser electron --config-file cypress.config.cjs",
+    "select": "node scripts/record.mjs select",
+    "evidence": "node scripts/record.mjs prepare"
+  },
+  "dependencies": { "fflate": "0.8.2" },
+  "devDependencies": { "cypress": "16.1.1" }
+}
