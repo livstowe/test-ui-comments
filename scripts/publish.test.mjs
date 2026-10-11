@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { zipSync, strToU8 } from 'fflate';
-import { ARTIFACT, COMMENT_TAG, REPOSITORY, GitHubClient, hash, openEvidence, publishEvidence } from './publish.mjs';
+import { ARTIFACT, COMMENT_TAG, INLINE_TAG, REPOSITORY, GitHubClient, contextFromEvent, hash, openEvidence, publishEvidence } from './publish.mjs';
 import { mapChangedFiles } from './scenarios.mjs';
 
 const head = 'a'.repeat(40);
@@ -22,7 +22,7 @@ function fixture({ files = ['ui/filter.js'], results = {}, conclusion = 'success
       head_sha: head, head_branch: 'demo-change', head_repository: repository, pull_requests: [] },
     pr: { number: 7, state: 'open', head: { sha: head, ref: 'demo-change', repo: repository },
       base: { sha: base, repo: repository }, merge_commit_sha: merge, changed_files: files.length },
-    files: files.map((filename) => ({ filename })), comments: [], writes: [], calls: [], beforeRead: () => {},
+    files: files.map((filename) => ({ filename })), comments: [], writes: [], calls: [], beforeRead: () => {}, attachments: new Map(),
   };
   const mapping = mapChangedFiles(files);
   state.manifest = { schema_version: 1, repository: REPOSITORY, source_event: 'pull_request', run_id: 401,
@@ -68,8 +68,27 @@ function fixture({ files = ['ui/filter.js'], results = {}, conclusion = 'success
       throw new Error(`Unhandled fixture list: ${route}`);
     },
     async download(id) { assert.equal(id, state.artifact.id); return state.archive; },
+    async downloadAttachment(url) {
+      state.calls.push({ attachment: url });
+      assert.ok(state.attachments.has(url), 'Fixture must provide the native attachment bytes');
+      return state.attachments.get(url);
+    },
   };
   return state;
+}
+
+function ownerUpload(state) {
+  const receipt = { schema_version: 1, run_id: state.manifest.run_id, run_attempt: state.manifest.run_attempt,
+    tested_sha: state.manifest.tested_sha,
+    scenarios: state.manifest.scenarios.map(({ id, video }) => ({ id, sha256: video.sha256, size_bytes: video.size_bytes })),
+  };
+  const urls = receipt.scenarios.map((scenario, index) => `https://github.com/user-attachments/assets/00000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`);
+  urls.forEach((url, index) => state.attachments.set(url, state.members[state.manifest.scenarios[index].video.path]));
+  const comment = { id: 700, user: { login: 'livstowe', id: 27290147, type: 'User' } };
+  const rebuild = () => { comment.body = `${INLINE_TAG}\n<!-- ${JSON.stringify(receipt)} -->\n\n${urls.join('\n\n')}\n`; };
+  rebuild();
+  state.comments.push(comment);
+  return { receipt, urls, comment, rebuild };
 }
 
 async function rejected(state, pattern) {
@@ -272,6 +291,140 @@ test('API pagination accepts an exact bound and rejects overflow', async () => {
   assert.equal((await client.list(`${prefix}/pulls`, 100)).length, 100);
   const overflow = new GitHubClient('test-token', async () => new Response(JSON.stringify(new Array(100).fill({}))));
   await assert.rejects(overflow.list(`${prefix}/pulls`, 100), /exceeds size limit/);
+});
+
+test('owner handoff automatically updates the same bot ID, preserves the human receipt and validates a no-op', async () => {
+  const state = fixture({ files: ['ui/filter.js', 'ui/state.js'] });
+  const initial = await publishEvidence(state.client, state.context, { write: true });
+  const upload = ownerUpload(state);
+  const humanBody = upload.comment.body;
+  state.context.handoffCommentId = upload.comment.id;
+  state.context.pullRequestNumber = 7;
+  const update = await publishEvidence(state.client, state.context, { write: true });
+  assert.equal(update.action, 'update');
+  assert.equal(update.id, initial.id);
+  assert.equal(state.writes.at(-1).method, 'PATCH');
+  assert.match(update.body, /manually uploaded by the repository owner/);
+  assert.match(update.body, /maintains this comment automatically/);
+  for (const url of upload.urls) assert.ok(update.body.includes(`\n\n${url}\n`), 'Native player URL must occupy its own paragraph');
+  assert.equal(state.comments.find(({ id }) => id === 700).body, humanBody);
+  assert.equal((await publishEvidence(state.client, state.context, { write: true })).action, 'unchanged');
+  assert.equal(state.writes.length, 2);
+  assert.equal(state.calls.filter(({ attachment }) => attachment).length, 4, 'No-op must revalidate attachment bytes');
+});
+
+test('counterfeit handoff senders are ignored without downloading attachments', async (t) => {
+  for (const field of ['login', 'id', 'type']) await t.test(field, async () => {
+    const state = fixture();
+    const upload = ownerUpload(state);
+    upload.comment.user[field] = field === 'id' ? 1 : field === 'type' ? 'Bot' : 'other-user';
+    const result = await publishEvidence(state.client, state.context, { write: true });
+    assert.match(result.body, /no inline video attachments/);
+    assert.equal(state.calls.some(({ attachment }) => attachment), false);
+    assert.equal(state.comments.find(({ id }) => id === 700).body, upload.comment.body);
+  });
+});
+
+test('valid owner handoff for another source run preserves artifact-only publication', async () => {
+  const state = fixture();
+  const upload = ownerUpload(state);
+  upload.receipt.run_id = 400;
+  upload.rebuild();
+  const result = await publishEvidence(state.client, state.context);
+  assert.match(result.body, /no matching owner upload handoff/);
+  assert.equal(state.calls.some(({ attachment }) => attachment), false);
+});
+
+test('attachment URL order is checked against distinct recording hashes', async () => {
+  const state = fixture({ files: ['ui/filter.js', 'ui/state.js'] });
+  const distinct = Uint8Array.from(header);
+  distinct[15] = 1;
+  state.members['videos/toggle-state.mp4'] = distinct;
+  state.manifest.scenarios[1].video.sha256 = hash(distinct);
+  state.repack();
+  const upload = ownerUpload(state);
+  upload.urls.reverse();
+  upload.rebuild();
+  await rejected(state, /bytes, size or hash/);
+});
+
+test('malformed, stale, ambiguous and conflicting owner handoffs reject without writes', async (t) => {
+  const cases = [
+    ['missing JSON receipt', (s, u) => { u.comment.body = `${INLINE_TAG}\nNo receipt.`; }, /receipt/],
+    ['extra receipt field', (s, u) => { u.receipt.extra = true; u.rebuild(); }, /malformed/],
+    ['stale run attempt', (s, u) => { u.receipt.run_attempt += 1; u.rebuild(); }, /stale/],
+    ['stale tested SHA', (s, u) => { u.receipt.tested_sha = 'd'.repeat(40); u.rebuild(); }, /stale/],
+    ['wrong scenario hash', (s, u) => { u.receipt.scenarios[0].sha256 = '0'.repeat(64); u.rebuild(); }, /match recording/],
+    ['wrong receipt size', (s, u) => { u.receipt.scenarios[0].size_bytes += 1; u.rebuild(); }, /match recording/],
+    ['receipt exceeds native limit', (s, u) => { u.receipt.scenarios[0].size_bytes = 10 * 1024 * 1024 + 1; u.rebuild(); }, /malformed/],
+    ['wrong scenario order', (s, u) => { u.receipt.scenarios.reverse(); u.rebuild(); }, /match recording/],
+    ['unknown URL', (s, u) => { u.urls[0] = 'https://example.test/video.mp4'; u.rebuild(); }, /URLs/],
+    ['signed URL in receipt', (s, u) => { u.urls[0] += '?token=never-emit-this'; u.rebuild(); }, /URLs/],
+    ['missing URL', (s, u) => { u.urls.pop(); u.rebuild(); }, /URLs/],
+    ['duplicate URL', (s, u) => { u.urls[1] = u.urls[0]; u.rebuild(); }, /URLs/],
+    ['duplicate registry', (s, u) => { s.comments.push({ ...copy(u.comment), id: 701 }); }, /Duplicate/],
+    ['attachment size differs', (s, u) => { s.attachments.set(u.urls[0], header.subarray(0, 15)); }, /bytes, size or hash/],
+    ['attachment hash differs', (s, u) => { const changed = Uint8Array.from(header); changed[15] = 1; s.attachments.set(u.urls[0], changed); }, /bytes, size or hash/],
+    ['triggering receipt absent', (s, u) => { s.context.handoffCommentId = 701; }, /stale|conflicting/],
+    ['handoff event from different PR', (s, u) => { s.context.pullRequestNumber = 8; }, /different PR/],
+  ];
+  for (const [name, mutate, pattern] of cases) await t.test(name, async () => {
+    const state = fixture({ files: ['ui/filter.js', 'ui/state.js'] });
+    const upload = ownerUpload(state);
+    mutate(state, upload);
+    await rejected(state, pattern);
+  });
+});
+
+test('issue_comment context accepts only the exact owner created receipt on a PR', () => {
+  const state = fixture();
+  const upload = ownerUpload(state);
+  const event = { action: 'created', repository: { full_name: REPOSITORY, id: 101 },
+    issue: { number: 7, pull_request: {} }, comment: upload.comment };
+  const environment = { GITHUB_EVENT_NAME: 'issue_comment', GITHUB_REPOSITORY: REPOSITORY, GITHUB_REPOSITORY_ID: '101' };
+  assert.deepEqual(contextFromEvent(event, environment), { ...state.context, pullRequestNumber: 7, handoffCommentId: 700 });
+  assert.throws(() => contextFromEvent({ ...event, action: 'edited' }, environment), /Unsupported/);
+  assert.throws(() => contextFromEvent({ ...event, issue: { number: 7 } }, environment), /Unsupported/);
+  assert.throws(() => contextFromEvent({ ...event, comment: { ...event.comment, user: { ...event.comment.user, id: 1 } } }, environment), /identity/);
+  assert.deepEqual(contextFromEvent({ workflow_run: state.run }, { ...environment, GITHUB_EVENT_NAME: 'workflow_run' }), state.context);
+});
+
+test('native downloads use no authorization through bounded allowed HTTPS redirects', async () => {
+  const native = 'https://github.com/user-attachments/assets/00000000-0000-0000-0000-000000000001';
+  const signed = 'https://private-user-images.githubusercontent.com/1/toy.mp4?signature=do-not-print';
+  const calls = [];
+  const client = new GitHubClient('never-forward-token', async (url, options) => {
+    calls.push({ url: String(url), options });
+    return calls.length === 1 ? new Response(null, { status: 302, headers: { location: signed } }) : new Response(header);
+  });
+  assert.deepEqual(await client.downloadAttachment(native), Buffer.from(header));
+  assert.equal(calls.length, 2);
+  for (const { options } of calls) {
+    assert.equal(options.headers, undefined);
+    assert.equal(options.redirect, 'manual');
+  }
+  for (const location of ['https://example.test/clip', 'https://unrelated.s3.amazonaws.com/clip', 'http://user-images.githubusercontent.com/clip', 'https://user-images.githubusercontent.com:444/clip', 'https://username@user-images.githubusercontent.com/clip']) {
+    const rejectedClient = new GitHubClient('test-token', async () => new Response(null, { status: 302, headers: { location } }));
+    await assert.rejects(rejectedClient.downloadAttachment(native), /Unsafe native attachment redirect/);
+  }
+  const loop = new GitHubClient('test-token', async () => new Response(null, { status: 302, headers: { location: native } }));
+  await assert.rejects(loop.downloadAttachment(native), /redirect limit/);
+  const oversized = new GitHubClient('test-token', async () => new Response(new Uint8Array(10 * 1024 * 1024 + 1)));
+  await assert.rejects(oversized.downloadAttachment(native), /size limit/);
+});
+
+test('the observed exact GitHub S3 attachment host is allowed without authorization', async () => {
+  const native = 'https://github.com/user-attachments/assets/00000000-0000-0000-0000-000000000001';
+  const calls = [];
+  const client = new GitHubClient('never-forward-token', async (url, options) => {
+    calls.push({ url: String(url), options });
+    return calls.length === 1 ? new Response(null, { status: 302, headers: {
+      location: 'https://github-production-user-asset-6210df.s3.amazonaws.com/toy.mp4?signature=not-public',
+    } }) : new Response(header);
+  });
+  assert.deepEqual(await client.downloadAttachment(native), Buffer.from(header));
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].options.headers, undefined);
 });
 
 test('HTTP permission failures identify the public route without exposing the token', async () => {
