@@ -340,7 +340,7 @@ function buildComment(manifest, run, artifact, mapping, nativeUrls) {
   const escapedPaths = mapping.unmapped.map((name) => `- <code>${name.replace(/[&<>"'`\[\]*_~|():]/g,
     (character) => `&#${character.codePointAt(0)};`)}</code>`);
   const inlineRows = nativeUrls.length ? [
-    'Native videos were manually uploaded by the repository owner. The bot verified their bytes and maintains this comment automatically.', '',
+    "Native videos were uploaded through the repository owner's authenticated GitHub CLI. The bot verified their bytes and maintains this comment automatically.", '',
     ...manifest.scenarios.flatMap((scenario, index) => [`**${SCENARIOS[scenario.id].label}: ${scenario.result.toUpperCase()}**`, '', nativeUrls[index], '']),
   ] : ['This comment contains no inline video attachments; no matching owner upload handoff was supplied.', ''];
   const body = [COMMENT_TAG, `<!-- run=${run.id} attempt=${run.run_attempt} -->`, '### Synthetic UI recordings', '',
