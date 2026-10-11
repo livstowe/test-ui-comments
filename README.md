@@ -84,8 +84,8 @@ checks. Hosted Cypress runs use the locked dependency set on `ubuntu-latest`.
 
 ## Hosted proof
 
-Public run, PR, comment and persistent synthetic-video links will be recorded
-here after the hosted cases complete.
+See [the verified hosted proof](proof/README.md), [the exact bot comment](proof/comment-example.md)
+and [the real inline players](https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479).
 
 ## References
 

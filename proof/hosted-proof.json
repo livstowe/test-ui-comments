@@ -1,0 +1,296 @@
+{
+  "repository": "livstowe/test-ui-comments",
+  "pull_request": "https://github.com/livstowe/test-ui-comments/pull/1",
+  "unmapped_pull_request": "https://github.com/livstowe/test-ui-comments/pull/2",
+  "comment_url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+  "comment_id": 6111060479,
+  "trusted_publisher_commit": "3cdc8f450a715ed89b5fe293ffde3588318174e1",
+  "recording": {
+    "repository": "livstowe/test-ui-comments",
+    "run_url": "https://github.com/livstowe/test-ui-comments/actions/runs/38156411288",
+    "run_id": 38156411288,
+    "run_attempt": 1,
+    "artifact_id": 11709080326,
+    "artifact_sha256": "1ab5853d93329bfbe1be45ad60cc31cc6ba82d2e52ca4ea748101993d94f4cdd",
+    "tested_sha": "b74bff6d29b345f082585c6754c485c8eeeb9497",
+    "current_pr_binding": true,
+    "clips": [
+      {
+        "scenario": "filter-items",
+        "result": "passed",
+        "size_bytes": 274266,
+        "sha256": "46a5fdfe358441aaa5d722d950b6a6e16015ba47bc827f0b6420a27c3288f3f9"
+      },
+      {
+        "scenario": "toggle-state",
+        "result": "passed",
+        "size_bytes": 129107,
+        "sha256": "a67252d0bdfc1c686944c806c080b3c202df7d3f965d825d160401738fb955c9"
+      },
+      {
+        "scenario": "dismiss-notice",
+        "result": "passed",
+        "size_bytes": 140100,
+        "sha256": "eea667e561947454ef214c517b1d55374e88bccd3931132501ae30c3ef178e08"
+      }
+    ]
+  },
+  "native_upload_mode": "manual owner CLI upload; automatic verified bot maintenance",
+  "native_videos": [
+    {
+      "scenario": "filter-items",
+      "sha256": "46a5fdfe358441aaa5d722d950b6a6e16015ba47bc827f0b6420a27c3288f3f9",
+      "size_bytes": 274266,
+      "url": "https://github.com/user-attachments/assets/4b554dfb-341d-41e2-935a-19b5cd0fc15a"
+    },
+    {
+      "scenario": "toggle-state",
+      "sha256": "a67252d0bdfc1c686944c806c080b3c202df7d3f965d825d160401738fb955c9",
+      "size_bytes": 129107,
+      "url": "https://github.com/user-attachments/assets/4f7b425f-4bef-4ee6-9459-2439c3d504f9"
+    },
+    {
+      "scenario": "dismiss-notice",
+      "sha256": "eea667e561947454ef214c517b1d55374e88bccd3931132501ae30c3ef178e08",
+      "size_bytes": 140100,
+      "url": "https://github.com/user-attachments/assets/4e324245-bb86-4043-af0c-f873acaa33e7"
+    }
+  ],
+  "browser_playback": {
+    "url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+    "commentId": 6111060479,
+    "videoCount": 3,
+    "players": [
+      {
+        "sourceHost": "private-user-images.githubusercontent.com",
+        "playbackStartTime": 2,
+        "controls": true,
+        "duration": 6.28,
+        "currentTime": 2.8029,
+        "paused": false,
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "readyState": 4,
+        "error": null
+      },
+      {
+        "sourceHost": "private-user-images.githubusercontent.com",
+        "playbackStartTime": 2,
+        "controls": true,
+        "duration": 4.6,
+        "currentTime": 2.80169,
+        "paused": false,
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "readyState": 4,
+        "error": null
+      },
+      {
+        "sourceHost": "private-user-images.githubusercontent.com",
+        "playbackStartTime": 2,
+        "controls": true,
+        "duration": 4.24,
+        "currentTime": 2.801652,
+        "paused": false,
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "readyState": 4,
+        "error": null
+      }
+    ],
+    "playback_verified": true
+  },
+  "local_unit_checks": {
+    "passed": 99,
+    "publisher": 84,
+    "producer": 15,
+    "mode": "local assertions; API adapters and tiny MP4 headers mocked"
+  },
+  "hosted_cases": [
+    {
+      "case": "bot create",
+      "producer": 38154830270,
+      "publisher": 38154894493,
+      "publisher_attempt": 1,
+      "outcome": "created comment 6111060479"
+    },
+    {
+      "case": "three-scenario update and unmapped path",
+      "producer": 38154990566,
+      "publisher": 38155068455,
+      "publisher_attempt": 1,
+      "outcome": "updated the same comment; docs/demo-notes.md unmapped"
+    },
+    {
+      "case": "duplicate delivery",
+      "producer": 38154990566,
+      "publisher": 38155068455,
+      "publisher_attempt": 2,
+      "outcome": "unchanged ID, body and timestamp"
+    },
+    {
+      "case": "stale source replay",
+      "producer": 38154830270,
+      "publisher": 38154894493,
+      "publisher_attempt": 2,
+      "outcome": "rejected current-head mismatch; unchanged comment"
+    },
+    {
+      "case": "real failing assertion",
+      "producer": 38155247186,
+      "publisher": 38155326014,
+      "publisher_attempt": 1,
+      "outcome": "producer failed; toggle marked FAILED; same-ID bot update"
+    },
+    {
+      "case": "restore passing behavior",
+      "producer": 38155412034,
+      "publisher": 38155486114,
+      "publisher_attempt": 1,
+      "outcome": "three passing scenarios; same-ID bot update"
+    },
+    {
+      "case": "unmapped-only PR",
+      "producer": 38155470051,
+      "publisher": 38155483742,
+      "publisher_attempt": 1,
+      "outcome": "manifest-only evidence; no browser run or bot comment"
+    },
+    {
+      "case": "fresh inline source",
+      "producer": 38156411288,
+      "publisher": 38156490674,
+      "publisher_attempt": 1,
+      "outcome": "current three-scenario browser evidence"
+    },
+    {
+      "case": "native upload handoff",
+      "producer": 38156411288,
+      "publisher": 38156579668,
+      "publisher_attempt": 1,
+      "outcome": "owner user upload; automatic same-ID bot update with three real players"
+    },
+    {
+      "case": "native handoff replay",
+      "producer": 38156411288,
+      "publisher": 38156579668,
+      "publisher_attempt": 2,
+      "outcome": "unchanged ID, body and timestamp"
+    }
+  ],
+  "comment_snapshots": [
+    {
+      "case": "created",
+      "pr": 1,
+      "managed_comment_count": 1,
+      "id": 6111060479,
+      "html_url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+      "created_at": "2026-10-11T16:18:32Z",
+      "updated_at": "2026-10-11T16:18:32Z",
+      "author": "github-actions[bot]",
+      "author_type": "Bot",
+      "source_run_id": 38154830270,
+      "source_attempt": 1,
+      "body_sha256": "4703edd6488a86b682e43ef5c348271afc404ca469abcc11ae5a3e0b112b5cd0"
+    },
+    {
+      "case": "updated",
+      "pr": 1,
+      "managed_comment_count": 1,
+      "id": 6111060479,
+      "html_url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+      "created_at": "2026-10-11T16:18:32Z",
+      "updated_at": "2026-10-11T16:20:57Z",
+      "author": "github-actions[bot]",
+      "author_type": "Bot",
+      "source_run_id": 38154990566,
+      "source_attempt": 1,
+      "body_sha256": "1568de0712ffd1ccb7de14837aa7ed461fd3653643435bc4ee85de2798785e38"
+    },
+    {
+      "case": "duplicate",
+      "pr": 1,
+      "managed_comment_count": 1,
+      "id": 6111060479,
+      "html_url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+      "created_at": "2026-10-11T16:18:32Z",
+      "updated_at": "2026-10-11T16:20:57Z",
+      "author": "github-actions[bot]",
+      "author_type": "Bot",
+      "source_run_id": 38154990566,
+      "source_attempt": 1,
+      "body_sha256": "1568de0712ffd1ccb7de14837aa7ed461fd3653643435bc4ee85de2798785e38"
+    },
+    {
+      "case": "stale",
+      "pr": 1,
+      "managed_comment_count": 1,
+      "id": 6111060479,
+      "html_url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+      "created_at": "2026-10-11T16:18:32Z",
+      "updated_at": "2026-10-11T16:20:57Z",
+      "author": "github-actions[bot]",
+      "author_type": "Bot",
+      "source_run_id": 38154990566,
+      "source_attempt": 1,
+      "body_sha256": "1568de0712ffd1ccb7de14837aa7ed461fd3653643435bc4ee85de2798785e38"
+    },
+    {
+      "case": "failed",
+      "pr": 1,
+      "managed_comment_count": 1,
+      "id": 6111060479,
+      "html_url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+      "created_at": "2026-10-11T16:18:32Z",
+      "updated_at": "2026-10-11T16:24:36Z",
+      "author": "github-actions[bot]",
+      "author_type": "Bot",
+      "source_run_id": 38155247186,
+      "source_attempt": 1,
+      "body_sha256": "9115324ff11f7228a31ca9c4ba658d558100fdeb6b653458a967c7941832799b"
+    },
+    {
+      "case": "recovered",
+      "pr": 1,
+      "managed_comment_count": 1,
+      "id": 6111060479,
+      "html_url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+      "created_at": "2026-10-11T16:18:32Z",
+      "updated_at": "2026-10-11T16:26:53Z",
+      "author": "github-actions[bot]",
+      "author_type": "Bot",
+      "source_run_id": 38155412034,
+      "source_attempt": 1,
+      "body_sha256": "3083a5f15f26f88be7676bc88dbdc2bd58f4356e83d43fc73bdc55240e5cd035"
+    },
+    {
+      "case": "inline",
+      "pr": 1,
+      "managed_comment_count": 1,
+      "id": 6111060479,
+      "html_url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+      "created_at": "2026-10-11T16:18:32Z",
+      "updated_at": "2026-10-11T16:42:45Z",
+      "author": "github-actions[bot]",
+      "author_type": "Bot",
+      "source_run_id": 38156411288,
+      "source_attempt": 1,
+      "body_sha256": "ab6d03ed4e8c9d6bfb121f8f36c3c6556205375759771bf08af3a2e69d853878"
+    },
+    {
+      "case": "inline-duplicate",
+      "pr": 1,
+      "managed_comment_count": 1,
+      "id": 6111060479,
+      "html_url": "https://github.com/livstowe/test-ui-comments/pull/1#issuecomment-6111060479",
+      "created_at": "2026-10-11T16:18:32Z",
+      "updated_at": "2026-10-11T16:42:45Z",
+      "author": "github-actions[bot]",
+      "author_type": "Bot",
+      "source_run_id": 38156411288,
+      "source_attempt": 1,
+      "body_sha256": "ab6d03ed4e8c9d6bfb121f8f36c3c6556205375759771bf08af3a2e69d853878"
+    }
+  ],
+  "source_claim_limit": "Hashes verify video bytes; scenario outcomes remain producer claims."
+}
