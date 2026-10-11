@@ -273,3 +273,12 @@ test('API pagination accepts an exact bound and rejects overflow', async () => {
   const overflow = new GitHubClient('test-token', async () => new Response(JSON.stringify(new Array(100).fill({}))));
   await assert.rejects(overflow.list(`${prefix}/pulls`, 100), /exceeds size limit/);
 });
+
+test('HTTP permission failures identify the public route without exposing the token', async () => {
+  const client = new GitHubClient('synthetic-secret', async () => new Response(JSON.stringify({ message: 'Resource not accessible by integration' }), { status: 403 }));
+  await assert.rejects(client.json(`${prefix}/issues/7/comments`, { method: 'POST', body: { body: 'Synthetic evidence' } }), (error) => {
+    assert.match(error.message, /POST .*issues\/7\/comments returned HTTP 403: Resource not accessible/);
+    assert.doesNotMatch(error.message, /synthetic-secret/);
+    return true;
+  });
+});
