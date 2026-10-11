@@ -102,6 +102,7 @@ export class GitHubClient {
     const response = await this.fetcher(`https://api.github.com${route}`, {
       method, redirect, signal: AbortSignal.timeout(20_000),
       headers: { Authorization: `Bearer ${this.token}`, Accept: 'application/vnd.github+json',
+        'User-Agent': 'synthetic-ui-evidence-publisher',
         'X-GitHub-Api-Version': '2022-11-28', ...(body ? { 'Content-Type': 'application/json' } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
@@ -111,7 +112,9 @@ export class GitHubClient {
         const error = parseJson(await readBounded(response, 16 * 1024));
         if (typeof error.message === 'string' && error.message.length <= 200) detail = `: ${error.message}`;
       } catch { /* Status and public API route remain useful without error JSON. */ }
-      throw new PublicationError(`${method} ${route.split('?')[0]} returned HTTP ${response.status}${detail}`);
+      const required = response.headers.get('x-accepted-github-permissions');
+      const permissionHint = required && required.length <= 512 && !/[\r\n]/.test(required) ? ` (accepted permissions: ${required})` : '';
+      throw new PublicationError(`${method} ${route.split('?')[0]} returned HTTP ${response.status}${detail}${permissionHint}`);
     }
     return response;
   }
