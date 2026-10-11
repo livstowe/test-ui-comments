@@ -304,7 +304,7 @@ test('owner handoff automatically updates the same bot ID, preserves the human r
   assert.equal(update.action, 'update');
   assert.equal(update.id, initial.id);
   assert.equal(state.writes.at(-1).method, 'PATCH');
-  assert.match(update.body, /manually uploaded by the repository owner/);
+  assert.match(update.body, /uploaded through the repository owner's authenticated GitHub CLI/);
   assert.match(update.body, /maintains this comment automatically/);
   for (const url of upload.urls) assert.ok(update.body.includes(`\n\n${url}\n`), 'Native player URL must occupy its own paragraph');
   assert.equal(state.comments.find(({ id }) => id === 700).body, humanBody);
